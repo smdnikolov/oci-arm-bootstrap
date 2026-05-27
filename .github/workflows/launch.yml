@@ -8,6 +8,7 @@ on:
 permissions:
   actions: write              # so the workflow can disable itself after success
   contents: read
+  issues: write               # so the workflow can open a "launched" issue (emails you)
 
 concurrency:
   group: oci-launch
@@ -58,6 +59,32 @@ jobs:
           MEMORY_GB: 24
           BOOT_VOLUME_GB: 200
         run: bash launch.sh
+
+      - name: Notify by opening a GitHub issue
+        if: steps.attempt.outputs.launched == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AD: ${{ steps.attempt.outputs.ad }}
+          INSTANCE_ID: ${{ steps.attempt.outputs.instance_id }}
+          PUBLIC_IP: ${{ steps.attempt.outputs.public_ip }}
+        run: |
+          gh issue create \
+            --title "OCI ARM instance launched 🎉" \
+            --body "$(cat <<EOF
+          Your Always-Free Ampere A1 instance is now running.
+
+          - **Availability domain**: \`${AD:-unknown}\`
+          - **Instance OCID**: \`${INSTANCE_ID:-see OCI Console}\`
+          - **Public IP**: \`${PUBLIC_IP:-see OCI Console}\`
+
+          Next steps:
+          1. SSH in: \`ssh -i ~/.ssh/<your-key> ubuntu@${PUBLIC_IP:-<public-ip>}\`
+          2. Install Docker and run your Stremio server.
+          3. Open ports 11470/12470 in the VCN's Security List for Stremio access.
+
+          The launcher workflow has been auto-disabled. You can re-enable it if you ever want to provision again.
+          EOF
+          )"
 
       - name: Disable workflow on success
         if: steps.attempt.outputs.launched == 'true'

@@ -72,9 +72,24 @@ for AD in $ADS; do
 
   if [ $RC -eq 0 ]; then
     echo "SUCCESS: instance launched in $AD"
-    # Flag that drives the workflow's "disable schedule" step.
     if [ -n "${GITHUB_OUTPUT:-}" ]; then
-      echo "launched=true" >> "$GITHUB_OUTPUT"
+      INSTANCE_ID=$(echo "$OUT" | jq -r '.data.id // empty' 2>/dev/null)
+      PUBLIC_IP=""
+      if [ -n "$INSTANCE_ID" ]; then
+        # Resolve the VNIC -> public IP. Best-effort: don't fail the run if this errors.
+        VNIC_ID=$(oci compute instance list-vnics --instance-id "$INSTANCE_ID" \
+          --query 'data[0].id' --raw-output 2>/dev/null || true)
+        if [ -n "$VNIC_ID" ] && [ "$VNIC_ID" != "null" ]; then
+          PUBLIC_IP=$(oci network vnic get --vnic-id "$VNIC_ID" \
+            --query 'data."public-ip"' --raw-output 2>/dev/null || true)
+        fi
+      fi
+      {
+        echo "launched=true"
+        echo "ad=$AD"
+        echo "instance_id=${INSTANCE_ID:-}"
+        echo "public_ip=${PUBLIC_IP:-}"
+      } >> "$GITHUB_OUTPUT"
     fi
     exit 0
   fi
