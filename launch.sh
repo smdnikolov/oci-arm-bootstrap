@@ -72,6 +72,10 @@ for AD in $ADS; do
 
   if [ $RC -eq 0 ]; then
     echo "SUCCESS: instance launched in $AD"
+    # Flag that drives the workflow's "disable schedule" step.
+    if [ -n "${GITHUB_OUTPUT:-}" ]; then
+      echo "launched=true" >> "$GITHUB_OUTPUT"
+    fi
     exit 0
   fi
 
@@ -81,14 +85,16 @@ for AD in $ADS; do
     continue
   fi
 
-  # Anything else looks like a config mistake — fail loud so the run goes red.
+  # Anything else looks like a config mistake — fail loud so the run goes red and emails us.
   echo "Non-capacity error — failing the run so you can investigate logs"
   exit 1
 done
 
 if [ $CAPACITY_HIT -eq 1 ]; then
   echo "All ADs out of capacity this round. Will retry on next schedule."
-  exit 75   # non-zero so workflow does NOT mark success / disable itself
+  # Exit 0 so GitHub does NOT send a failure email for the expected case.
+  # The workflow's disable-on-success step is gated by the 'launched' output, not exit code.
+  exit 0
 fi
 
 echo "No ADs were tried — something is wrong with AD discovery"

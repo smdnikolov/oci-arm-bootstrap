@@ -48,6 +48,7 @@ jobs:
           chmod 600 ~/.oci/config
 
       - name: Attempt launch
+        id: attempt
         env:
           COMPARTMENT_ID: ${{ secrets.OCI_COMPARTMENT_ID }}
           SUBNET_ID: ${{ secrets.OCI_SUBNET_ID }}
@@ -59,7 +60,7 @@ jobs:
         run: bash launch.sh
 
       - name: Disable workflow on success
-        if: success()
+        if: steps.attempt.outputs.launched == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh workflow disable launch.yml
