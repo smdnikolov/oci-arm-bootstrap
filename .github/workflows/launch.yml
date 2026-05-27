@@ -1,0 +1,61 @@
+name: Launch OCI ARM instance
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'   # every 10 minutes (GitHub cron is best-effort)
+  workflow_dispatch:          # lets you trigger it manually from the Actions tab
+
+concurrency:
+  group: oci-launch
+  cancel-in-progress: false
+
+jobs:
+  launch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install OCI CLI
+        run: |
+          curl -L https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh -o install.sh
+          chmod +x install.sh
+          ./install.sh --accept-all-defaults --install-dir "$HOME/lib/oracle-cli" --exec-dir "$HOME/bin"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Write OCI config
+        env:
+          OCI_USER: ${{ secrets.OCI_USER }}
+          OCI_TENANCY: ${{ secrets.OCI_TENANCY }}
+          OCI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
+          OCI_REGION: ${{ secrets.OCI_REGION }}
+          OCI_API_KEY: ${{ secrets.OCI_API_KEY_PEM }}
+        run: |
+          mkdir -p ~/.oci
+          printf '%s' "$OCI_API_KEY" > ~/.oci/api_key.pem
+          chmod 600 ~/.oci/api_key.pem
+          cat > ~/.oci/config <<EOF
+          [DEFAULT]
+          user=$OCI_USER
+          tenancy=$OCI_TENANCY
+          fingerprint=$OCI_FINGERPRINT
+          region=$OCI_REGION
+          key_file=~/.oci/api_key.pem
+          EOF
+          chmod 600 ~/.oci/config
+
+      - name: Attempt launch
+        env:
+          COMPARTMENT_ID: ${{ secrets.OCI_COMPARTMENT_ID }}
+          SUBNET_ID: ${{ secrets.OCI_SUBNET_ID }}
+          SSH_PUBLIC_KEY: ${{ secrets.SSH_PUBLIC_KEY }}
+          DISPLAY_NAME: arm-stremio
+          OCPUS: 4
+          MEMORY_GB: 24
+          BOOT_VOLUME_GB: 200
+        run: bash launch.sh
+
+      - name: Disable workflow on success
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow disable launch.yml
