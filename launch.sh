@@ -1,5 +1,19 @@
 #!/usr/bin/env bash
 set -u
+export SUPPRESS_LABEL_WARNING=True
+
+echo "=== Validating inputs ==="
+missing=0
+for var in COMPARTMENT_ID SUBNET_ID SSH_PUBLIC_KEY OCPUS MEMORY_GB BOOT_VOLUME_GB DISPLAY_NAME; do
+  if [ -z "${!var:-}" ]; then
+    echo "ERROR: required env var '$var' is empty or unset"
+    missing=1
+  fi
+done
+if [ $missing -ne 0 ]; then
+  echo "Fix the corresponding GitHub secret(s) and re-run."
+  exit 1
+fi
 
 echo "=== Looking up latest Ubuntu 24.04 aarch64 image ==="
 IMAGE_ID=$(oci compute image list \
@@ -24,10 +38,17 @@ echo "ADs: $ADS"
 
 CAPACITY_HIT=0
 
-# Build JSON payloads safely with jq (handles newlines / whitespace / escaping).
+# Write JSON to files and pass via file:// URIs — most reliable across CLI versions.
 SSH_KEY_CLEAN=$(printf '%s' "$SSH_PUBLIC_KEY" | tr -d '\r\n' | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')
-METADATA_JSON=$(jq -nc --arg k "$SSH_KEY_CLEAN" '{ssh_authorized_keys: $k}')
-SHAPE_CONFIG_JSON=$(jq -nc --argjson o "$OCPUS" --argjson m "$MEMORY_GB" '{ocpus: $o, memoryInGBs: $m}')
+META_FILE=/tmp/oci_metadata.json
+SHAPE_FILE=/tmp/oci_shape_config.json
+jq -nc --arg k "$SSH_KEY_CLEAN" '{ssh_authorized_keys: $k}' > "$META_FILE"
+jq -nc --argjson o "$OCPUS" --argjson m "$MEMORY_GB" '{ocpus: $o, memoryInGBs: $m}' > "$SHAPE_FILE"
+
+echo "--- metadata.json ---"
+cat "$META_FILE"; echo
+echo "--- shape_config.json ---"
+cat "$SHAPE_FILE"; echo
 
 for AD in $ADS; do
   [ -z "$AD" ] && continue
@@ -37,13 +58,13 @@ for AD in $ADS; do
     --availability-domain "$AD" \
     --compartment-id "$COMPARTMENT_ID" \
     --shape "VM.Standard.A1.Flex" \
-    --shape-config "$SHAPE_CONFIG_JSON" \
+    --shape-config "file://$SHAPE_FILE" \
     --image-id "$IMAGE_ID" \
     --subnet-id "$SUBNET_ID" \
     --assign-public-ip true \
     --display-name "$DISPLAY_NAME" \
     --boot-volume-size-in-gbs "$BOOT_VOLUME_GB" \
-    --metadata "$METADATA_JSON" \
+    --metadata "file://$META_FILE" \
     --wait-for-state RUNNING 2>&1)
   RC=$?
   echo "$OUT"
