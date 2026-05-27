@@ -5,6 +5,10 @@ on:
     - cron: '*/10 * * * *'   # every 10 minutes (GitHub cron is best-effort)
   workflow_dispatch:          # lets you trigger it manually from the Actions tab
 
+permissions:
+  actions: write              # so the workflow can disable itself after success
+  contents: read
+
 concurrency:
   group: oci-launch
   cancel-in-progress: false
