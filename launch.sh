@@ -24,6 +24,11 @@ echo "ADs: $ADS"
 
 CAPACITY_HIT=0
 
+# Build JSON payloads safely with jq (handles newlines / whitespace / escaping).
+SSH_KEY_CLEAN=$(printf '%s' "$SSH_PUBLIC_KEY" | tr -d '\r\n' | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')
+METADATA_JSON=$(jq -nc --arg k "$SSH_KEY_CLEAN" '{ssh_authorized_keys: $k}')
+SHAPE_CONFIG_JSON=$(jq -nc --argjson o "$OCPUS" --argjson m "$MEMORY_GB" '{ocpus: $o, memoryInGBs: $m}')
+
 for AD in $ADS; do
   [ -z "$AD" ] && continue
   echo "::group::Trying $AD"
@@ -32,13 +37,13 @@ for AD in $ADS; do
     --availability-domain "$AD" \
     --compartment-id "$COMPARTMENT_ID" \
     --shape "VM.Standard.A1.Flex" \
-    --shape-config "{\"ocpus\":$OCPUS,\"memoryInGBs\":$MEMORY_GB}" \
+    --shape-config "$SHAPE_CONFIG_JSON" \
     --image-id "$IMAGE_ID" \
     --subnet-id "$SUBNET_ID" \
     --assign-public-ip true \
     --display-name "$DISPLAY_NAME" \
     --boot-volume-size-in-gbs "$BOOT_VOLUME_GB" \
-    --metadata "{\"ssh_authorized_keys\":\"$SSH_PUBLIC_KEY\"}" \
+    --metadata "$METADATA_JSON" \
     --wait-for-state RUNNING 2>&1)
   RC=$?
   echo "$OUT"
