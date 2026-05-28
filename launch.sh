@@ -50,8 +50,19 @@ cat "$META_FILE"; echo
 echo "--- shape_config.json ---"
 cat "$SHAPE_FILE"; echo
 
+FIRST=1
 for AD in $ADS; do
   [ -z "$AD" ] && continue
+
+  # Small jitter + spacing between AD attempts to avoid hammering the LaunchInstance endpoint
+  # in lockstep with other bots. Skip on the first AD so cold-start latency stays low.
+  if [ $FIRST -eq 0 ]; then
+    SLEEP_S=$(( 8 + RANDOM % 5 ))   # 8-12 seconds
+    echo "Sleeping ${SLEEP_S}s before next AD..."
+    sleep "$SLEEP_S"
+  fi
+  FIRST=0
+
   echo "::group::Trying $AD"
 
   OUT=$(oci compute instance launch \
