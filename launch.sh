@@ -94,19 +94,20 @@ for AD in $ADS; do
     exit 0
   fi
 
-  if echo "$OUT" | grep -qi "Out of host capacity\|TooManyRequests\|InternalError"; then
-    echo "$AD: transient/capacity error, trying next AD"
+  # Treat anything network-/capacity-/5xx-flavoured as transient: try next AD, no email.
+  if echo "$OUT" | grep -qiE "Out of host capacity|TooManyRequests|InternalError|RequestException|timed out|timeout|ServiceUnavailable|ConnectionError|EndpointConnectionError|Could not connect|temporarily unavailable|throttl"; then
+    echo "$AD: transient error, trying next AD"
     CAPACITY_HIT=1
     continue
   fi
 
-  # Anything else looks like a config mistake — fail loud so the run goes red and emails us.
-  echo "Non-capacity error — failing the run so you can investigate logs"
+  # Anything else looks like a real config mistake — fail loud so the run goes red and emails us.
+  echo "Non-transient error — failing the run so you can investigate logs"
   exit 1
 done
 
 if [ $CAPACITY_HIT -eq 1 ]; then
-  echo "All ADs out of capacity this round. Will retry on next schedule."
+  echo "All ADs hit transient/capacity errors this round. Will retry on next schedule."
   # Exit 0 so GitHub does NOT send a failure email for the expected case.
   # The workflow's disable-on-success step is gated by the 'launched' output, not exit code.
   exit 0
