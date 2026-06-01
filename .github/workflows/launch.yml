@@ -19,11 +19,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install OCI CLI
-        run: |
-          curl -L https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh -o install.sh
-          chmod +x install.sh
-          ./install.sh --accept-all-defaults --install-dir "$HOME/lib/oracle-cli" --exec-dir "$HOME/bin"
-          echo "$HOME/bin" >> "$GITHUB_PATH"
+        run: pipx install oci-cli
 
       - name: Write OCI config
         env:
