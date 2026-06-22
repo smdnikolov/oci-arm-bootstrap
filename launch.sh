@@ -57,7 +57,7 @@ for AD in $ADS; do
   # Small jitter + spacing between AD attempts to avoid hammering the LaunchInstance endpoint
   # in lockstep with other bots. Skip on the first AD so cold-start latency stays low.
   if [ $FIRST -eq 0 ]; then
-    SLEEP_S=$(( 8 + RANDOM % 5 ))   # 8-12 seconds
+    SLEEP_S=$(( 2 + RANDOM % 3 ))   # 2-4 seconds
     echo "Sleeping ${SLEEP_S}s before next AD..."
     sleep "$SLEEP_S"
   fi
@@ -65,6 +65,9 @@ for AD in $ADS; do
 
   echo "::group::Trying $AD"
 
+  # --no-retry: "Out of host capacity" is HTTP 500, which the OCI CLI's default retry
+  # strategy keeps retrying for ~2 min before giving up. We WANT it to fail instantly so
+  # we can move to the next AD / next scheduled run and fire far more launch attempts.
   OUT=$(oci compute instance launch \
     --availability-domain "$AD" \
     --compartment-id "$COMPARTMENT_ID" \
@@ -76,6 +79,7 @@ for AD in $ADS; do
     --display-name "$DISPLAY_NAME" \
     --boot-volume-size-in-gbs "$BOOT_VOLUME_GB" \
     --metadata "file://$META_FILE" \
+    --no-retry \
     --wait-for-state RUNNING 2>&1)
   RC=$?
   echo "$OUT"
