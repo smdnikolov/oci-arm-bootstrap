@@ -49,8 +49,8 @@ jobs:
           SUBNET_ID: ${{ secrets.OCI_SUBNET_ID }}
           SSH_PUBLIC_KEY: ${{ secrets.SSH_PUBLIC_KEY }}
           DISPLAY_NAME: arm-stremio
-          OCPUS: 4
-          MEMORY_GB: 24
+          OCPUS: 2
+          MEMORY_GB: 12
           BOOT_VOLUME_GB: 200
         run: bash launch.sh
 
